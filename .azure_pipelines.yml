@@ -1,0 +1,50 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  aiFixEnabled: true
+
+stages:
+- stage: Build
+  jobs:
+  - job: BuildJob
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
+
+    - script: pip install -r requirements.txt
+      displayName: 'Install dependencies'
+
+    - script: python app.py
+      displayName: 'Run app.py (Build)'
+      continueOnError: true
+
+    - script: |
+        if [ $? -ne 0 ] && [ "$(aiFixEnabled)" = "true" ]; then
+          echo "Build failed. Running AI fix..."
+          python fix_with_ai.py app.py
+        fi
+      displayName: 'AI Self-Heal Build'
+
+- stage: Test
+  dependsOn: Build
+  jobs:
+  - job: TestJob
+    steps:
+    - script: python -m unittest test_app.py
+      displayName: 'Run Tests'
+      continueOnError: true
+
+    - script: |
+        if [ $? -ne 0 ] && [ "$(aiFixEnabled)" = "true" ]; then
+          echo "Tests failed. Running AI fix..."
+          python fix_with_ai.py test_app.py
+        fi
+      displayName: 'AI Self-Heal Test'
+
